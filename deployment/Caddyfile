@@ -1,0 +1,15 @@
+{$DOMAIN_NAME:localhost} {
+    encode gzip zstd
+
+    @api path /api/*
+    handle @api {
+        reverse_proxy backend:8000 {
+            flush_interval -1
+        }
+    }
+
+    handle {
+        reverse_proxy frontend:3000
+    }
+}
+

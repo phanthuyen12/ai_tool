@@ -1,0 +1,61 @@
+# Python / Backend
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.coverage
+htmlcov/
+build/
+dist/
+site-packages/
+storage_local/
+backend/storage_local/
+backend/.mypy_cache/
+backend/.coverage*
+
+# Frontend / Node
+node_modules/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/tsconfig.tsbuildinfo
+frontend/.turbo/
+frontend/.vercel/
+
+# Environment & Local Secrets
+.env
+.env.local
+.env.*.local
+backend/.env
+frontend/.env.local
+motion-studio/.env
+
+# Logs & Scratch
+*.log
+backend/logs/
+tmp/
+/tmp/
+.DS_Store
+
+# Local databases, generated media, and runtime state
+*.sqlite
+*.sqlite3
+*.db
+*.pid
+*.sock
+*.mp4
+*.mov
+*.webm
+*.srt
+motion-studio/out/
+motion-studio/src/compositions/generated/history/
+
+# Editor / OS metadata
+.vscode/
+.idea/
+*.swp
+*.swo
+._*
