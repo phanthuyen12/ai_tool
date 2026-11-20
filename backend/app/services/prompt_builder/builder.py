@@ -192,8 +192,17 @@ def build_video_prompt_layers(
         or (character.voice_style if character else "clear natural presenter voice")
     )
     clean_dialogue = (scene.dialogue or "").strip()
+    deep_work_mode = "[DEEP_WORK_MODE]" in (project.global_rules or "")
 
-    if project.voice_mode == "ai_generated" and clean_dialogue:
+    if deep_work_mode:
+        dialogue_layer = (
+            "Completely silent deep-work performance: no speech, narration, lip movement, captions, or music. "
+            "The person quietly works at the existing workstation, eyes focused on the existing task/screen, "
+            "typing or using only objects already visible in the reference. Maintain concentration for most of the clip. "
+            "Occasionally show one very subtle, believable expression change (brief thought, mild concern, tiny satisfied look), "
+            "then naturally return to focused work. No exaggerated acting, repeated gestures, or new actions/objects."
+        )
+    elif project.voice_mode == "ai_generated" and clean_dialogue:
         dialogue_layer = (
             f"The character speaks ONLY in {lang_label} with a {voice_desc}. "
             f"Keep every spoken word in {lang_label}; do not switch languages, translate, paraphrase, or add extra speech. "
@@ -243,7 +252,13 @@ def build_video_prompt_layers(
         ).strip(),
         "character_rules": format_character_rules(character, char_rule),
         "background_rules": "Preserve the exact background environment, workstation, lighting, and framing from the reference image.",
-        "scene_description": f"Action ({scene.planned_duration_sec:.1f}s): {scene.character_action or 'Natural calm studio presentation.'}",
+        "scene_description": (
+            f"Action ({scene.planned_duration_sec:.1f}s): Quiet focused deep work at the existing workstation; "
+            "mostly steady concentration, with one brief subtle natural expression change before returning to work. "
+            "Use only existing visible items; do not introduce new actions or objects."
+            if deep_work_mode
+            else f"Action ({scene.planned_duration_sec:.1f}s): {scene.character_action or 'Natural calm studio presentation.'}"
+        ),
         "continuity_instructions": continuity_text,
         "dialogue": dialogue_layer,
         "camera_instructions": cam_text,

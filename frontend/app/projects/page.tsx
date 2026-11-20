@@ -17,6 +17,7 @@ export default function ProjectsPage() {
   const [topic, setTopic] = useState("");
   const [language, setLanguage] = useState("vi-VN");
   const [scriptMode, setScriptMode] = useState<"ai_presenter" | "literal">("ai_presenter");
+  const [videoStyleMode, setVideoStyleMode] = useState<"presenter" | "deep_work">("presenter");
   const [voiceMode, setVoiceMode] = useState<"ai_generated" | "external_tts" | "silent">("ai_generated");
   const [voiceDescription, setVoiceDescription] = useState("Giọng tiếng Việt tự nhiên, rõ ràng, phát âm chuẩn; tốc độ vừa phải.");
   const [goalDescription, setGoalDescription] = useState("");
@@ -88,7 +89,10 @@ export default function ProjectsPage() {
           name: name.trim(),
           topic: topic.trim(),
           language,
-          voice_mode: voiceMode,
+          voice_mode: videoStyleMode === "deep_work" ? "silent" : voiceMode,
+          global_rules: videoStyleMode === "deep_work"
+            ? "[DEEP_WORK_MODE] Maintain consistent character identity and the exact reference set; silent focused-work performance, no narration, dialogue, captions, or music."
+            : undefined,
           script_mode: scriptMode,
           voice_description: voiceDescription,
           goal_description: goalDescription.trim(),
@@ -163,6 +167,15 @@ export default function ProjectsPage() {
             <Plus className="w-4 h-4 text-green-600" />
             Tạo dự án mới
           </h2>
+
+          <div>
+            <label className="mb-1 block text-xs text-slate-500">Dạng video</label>
+            <select value={videoStyleMode} onChange={(e) => setVideoStyleMode(e.target.value as typeof videoStyleMode)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900">
+              <option value="presenter">Thuyết trình / diễn xuất theo kịch bản</option>
+              <option value="deep_work">Deep work — im lặng tập trung làm việc</option>
+            </select>
+            {videoStyleMode === "deep_work" && <p className="mt-1 text-xs text-slate-500">Nhân vật làm việc yên lặng, thỉnh thoảng đổi nét mặt nhẹ rồi tập trung lại; không thoại, không thêm đạo cụ.</p>}
+          </div>
 
           <div>
             <div className="mb-1 flex items-center justify-between"><label className="block text-xs text-slate-500">Tên dự án *</label><span className={`text-xs ${name.length >= 240 ? "text-amber-700" : "text-slate-400"}`}>{name.length}/255</span></div>

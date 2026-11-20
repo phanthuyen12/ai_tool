@@ -87,7 +87,7 @@ def run_project_auto_production(parent_job_id: str) -> None:
         if not scene_ids:
             raise RuntimeError("The active script has no scenes.")
 
-        # Continuity requires the previous approved scene image, so images are generated sequentially.
+        # Prepare scene images first so each scene has an approved image anchor.
         for idx, scene_id in enumerate(scene_ids):
             if not _set_parent_progress(parent_job_id, 5 + int(idx / max(1, len(scene_ids)) * 35), f"Generating scene images ({idx + 1}/{len(scene_ids)})"):
                 return
@@ -113,7 +113,8 @@ def run_project_auto_production(parent_job_id: str) -> None:
                     approve_scene_image(db, scene)
                     db.commit()
 
-        # Only start clips after every scene image is available and approved.
+        # Generate clips in order. Each completed clip produces an ending-frame
+        # continuity image consumed by the next clip's video-generation job.
         for idx, scene_id in enumerate(scene_ids):
             if not _set_parent_progress(parent_job_id, 42 + int(idx / max(1, len(scene_ids)) * 42), f"Generating scene videos ({idx + 1}/{len(scene_ids)})"):
                 return

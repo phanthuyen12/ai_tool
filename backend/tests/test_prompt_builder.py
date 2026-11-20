@@ -174,6 +174,33 @@ def test_veo_r2v_prompt_sets_identity_reference_hierarchy():
     assert "do not recap" in layers["dialogue"]
 
 
+def test_deep_work_mode_is_silent_and_keeps_action_focused():
+    project = _sample_project()
+    project.global_rules = "[DEEP_WORK_MODE]"
+    char, rule, bg = _sample_char_and_bg()
+    scene = Scene(
+        id="s-deep-work",
+        project_id=project.id,
+        script_id="sc1",
+        scene_index=1,
+        title="Focused work",
+        planned_duration_sec=8.0,
+        dialogue="This dialogue must not be used.",
+        character_action="",
+    )
+    layers, compiled = build_video_prompt_layers(
+        scene=scene,
+        project=project,
+        character=char,
+        char_rule=rule,
+        background=bg,
+    )
+    assert "Completely silent deep-work performance" in layers["dialogue"]
+    assert "brief thought" in layers["dialogue"]
+    assert "focused deep work" in layers["scene_description"]
+    assert "This dialogue must not be used" not in compiled
+
+
 def test_audio_filter_retry_preserves_requested_dialogue():
     original = (
         "Animate reference image.\n\n"

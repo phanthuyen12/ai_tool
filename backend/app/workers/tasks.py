@@ -2,6 +2,7 @@ import contextlib
 import logging
 import socket
 import time
+import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterator, Optional
@@ -533,8 +534,40 @@ def run_scene_video_job(job_id: str) -> None:
         else:
             ref_payload = [storage.prepare_reference_for_flow2api(img_media)]
             ref_summary = [f"scene_image:{img_media.id}"]
+        # Start the next clip from the actual last frame of the previous clip.
+        previous_scene = db.scalars(
+            select(Scene).where(
+                Scene.script_id == scene.script_id,
+                Scene.scene_index < scene.scene_index,
+            ).order_by(Scene.scene_index.desc())
+        ).first()
+        if previous_scene:
+            previous_frame = db.scalars(
+                select(SceneAsset).where(
+                    SceneAsset.scene_id == previous_scene.id,
+                    SceneAsset.asset_role == "continuity_frame",
+                    SceneAsset.is_active.is_(True),
+                ).order_by(SceneAsset.version.desc())
+            ).first()
+            previous_frame_media = db.get(MediaAsset, previous_frame.media_asset_id) if previous_frame else None
+            if previous_frame_media:
+                ref_payload.insert(0, storage.prepare_reference_for_flow2api(previous_frame_media))
+                ref_summary.insert(0, f"previous_scene_last_frame:{previous_frame_media.id}")
         base_prompt = _resolve_scene_prompt_text(db, project, scene, "video")
-        keep_dialogue = project.voice_mode == "ai_generated" and bool((scene.dialogue or "").strip())
+        base_prompt = (
+            f"{base_prompt.rstrip()}\n\n"
+            "STRICT VISUAL LOCK: Reproduce only the people, objects, set, and visual elements already present in the supplied opening reference. "
+            "Do not invent, add, remove, replace, decorate, or transform anything: no extra props, products, charts, screens, signs, text, logos, furniture, "
+            "people, animals, graphics, particles, or effects. Keep the same presenter, face, clothing, exact room layout, object positions, colors, exposure, "
+            "lighting, framing, and camera angle for the entire clip. One uninterrupted shot; no cuts, transitions, zooms, pans, or reframing. "
+            "Animate only the explicitly requested action and the exact dialogue for this scene. If an action would require adding a new object or element, "
+            "omit that action and preserve the reference image."
+        )
+        keep_dialogue = (
+            "[DEEP_WORK_MODE]" not in (project.global_rules or "")
+            and project.voice_mode == "ai_generated"
+            and bool((scene.dialogue or "").strip())
+        )
 
         client = Flow2APIClient(
             base_url=runtime.flow2api_base_url,
@@ -655,6 +688,11 @@ def run_scene_video_job(job_id: str) -> None:
         with TempWorkspaceManager(prefix="vid") as tmp_dir:
             tmp_file = tmp_dir / f"scene_{scene.scene_index:02d}.mp4"
             client.download_temporary_asset(video_url, tmp_file, timeout=300.0)
+            last_frame_file = tmp_dir / f"scene_{scene.scene_index:02d}_last_frame.jpg"
+            subprocess.run(
+                ["ffmpeg", "-y", "-sseof", "-0.1", "-i", str(tmp_file), "-frames:v", "1", "-q:v", "2", str(last_frame_file)],
+                check=True, capture_output=True, timeout=60,
+            )
             media_asset = storage.save_file(
                 db,
                 owner_id=project.owner_id,
@@ -664,6 +702,16 @@ def run_scene_video_job(job_id: str) -> None:
                 asset_kind="video",
                 project_id=project.id,
                 extra_metadata={"flow2api_source_url": video_url, "flow_media_id": flow_media_id},
+            )
+            last_frame_asset = storage.save_file(
+                db,
+                owner_id=project.owner_id,
+                file_path=last_frame_file,
+                original_filename=f"{project.id}_scene_{scene.scene_index:02d}_last_frame.jpg",
+                mime_type="image/jpeg",
+                asset_kind="image",
+                project_id=project.id,
+                extra_metadata={"derived_from_scene_video": scene.id, "frame_position": "last"},
             )
 
         prev_videos = db.scalars(
@@ -686,6 +734,21 @@ def run_scene_video_job(job_id: str) -> None:
             continuity_metadata_json={"references_used": ref_summary},
         )
         db.add(scene_asset)
+        prior_frames = db.scalars(select(SceneAsset).where(
+            SceneAsset.scene_id == scene.id, SceneAsset.asset_role == "continuity_frame"
+        )).all()
+        frame_version = max((frame.version for frame in prior_frames), default=0) + 1
+        for frame in prior_frames:
+            frame.is_active = False
+        db.add(SceneAsset(
+            scene_id=scene.id,
+            media_asset_id=last_frame_asset.id,
+            asset_role="continuity_frame",
+            version=frame_version,
+            is_active=True,
+            generation_job_id=job.id,
+            continuity_metadata_json={"derived_from_video": media_asset.id, "position": "last_frame"},
+        ))
 
         # Spec IX: Never assume clips are always exactly 8s; update actual duration from ffprobe!
         if media_asset.duration_seconds:
